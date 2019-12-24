@@ -34,9 +34,9 @@ class DdpConnectionStatus {
 }
 
 class SubscriptionHandler {
-  DdpClient _ddpClient;
+  final DdpClient _ddpClient;
   String subId;
-  StreamController<bool> _readyStreamController = StreamController();
+  final StreamController<bool> _readyStreamController = StreamController();
   Stream<bool> _readyStream;
   SubscriptionHandler(this._ddpClient, this.subId) {
     _readyStream = _readyStreamController.stream.asBroadcastStream();
@@ -77,21 +77,21 @@ class DdpClient {
   final int PONG_WITHIN_SEC = 5;
   final Random _random = Random.secure();
 
-  StreamController<DdpConnectionStatus> _statusStreamController =
+  final StreamController<DdpConnectionStatus> _statusStreamController =
       StreamController();
   StreamController<dynamic> dataStreamController = StreamController();
   DdpConnectionStatus _connectionStatus;
   String _url;
   WebSocket _socket;
   int _maxRetryCount = 20;
-  Map<String, OnReconnectionCallback> _onReconnectCallbacks = {};
+  final Map<String, OnReconnectionCallback> _onReconnectCallbacks = {};
   String _sessionId;
   int _currentMethodId = 0;
   bool _flagToBeResetAtPongMsg = false;
   Timer _pingPeriodicTimer;
-  Map<String, Completer<dynamic>> _methodCompleters = {};
-  Map<String, SubscriptionCallback> _subscriptions = {};
-  Map<String, SubscriptionHandler> _subscriptionHandlers = {};
+  final Map<String, Completer<dynamic>> _methodCompleters = {};
+  final Map<String, SubscriptionCallback> _subscriptions = {};
+  final Map<String, SubscriptionHandler> _subscriptionHandlers = {};
   bool _isTryToReconnect = true;
   Timer _scheduleReconnectTimer;
 
