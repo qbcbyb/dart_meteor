@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:crypto/crypto.dart';
 import 'package:rxdart/rxdart.dart';
+
 import 'ddp_client.dart';
 
 class MeteorClientLoginResult {
@@ -19,7 +21,9 @@ class MeteorError extends Error {
   String message;
   String reason;
   String stack;
+  String method;
 
+  MeteorError();
   MeteorError.parse(Map<String, dynamic> object) {
     try {
       details = object['details']?.toString();
@@ -52,16 +56,22 @@ class MeteorClient {
   DdpClient connection;
 
   BehaviorSubject<DdpConnectionStatus> _statusSubject = BehaviorSubject();
-  Observable<DdpConnectionStatus> _statusStream;
+  ValueStream<DdpConnectionStatus> _statusStream;
 
   BehaviorSubject<bool> _loggingInSubject = BehaviorSubject();
-  Observable<bool> _loggingInStream;
+  Stream<bool> _loggingInStream;
 
   BehaviorSubject<String> _userIdSubject = BehaviorSubject();
-  Observable<String> _userIdStream;
+  Stream<String> _userIdStream;
 
   BehaviorSubject<Map<String, dynamic>> _userSubject = BehaviorSubject();
-  Observable<Map<String, dynamic>> _userStream;
+  Stream<Map<String, dynamic>> _userStream;
+
+  BehaviorSubject<MeteorError> _errorSubject = BehaviorSubject();
+  Stream<MeteorError> _errorStream;
+
+  bool get isConnected =>
+      _statusStream.hasValue && _statusStream.value.connected;
 
   String _userId;
   String _token;
@@ -73,7 +83,7 @@ class MeteorClient {
   /// Meteor.collections
   Map<String, Map<String, dynamic>> _collections = {};
   Map<String, BehaviorSubject<Map<String, dynamic>>> _collectionsSubject = {};
-  Map<String, Observable<Map<String, dynamic>>> collections = {};
+  Map<String, ValueStream<Map<String, dynamic>>> collections = {};
 
   MeteorClient.connect({String url}) {
     url = url.replaceFirst(RegExp(r'^http'), 'ws');
@@ -97,6 +107,7 @@ class MeteorClient {
     _loggingInStream = _loggingInSubject.stream;
     _userIdStream = _userIdSubject.stream;
     _userStream = _userSubject.stream;
+    _errorStream = _errorSubject.stream;
 
     prepareCollection('users');
 
@@ -172,6 +183,8 @@ class MeteorClient {
       _userSubject.add(_collections['users'][userId]);
     });
   }
+
+  Stream<MeteorError> get errorStream => _errorStream;
 
   /// To make sure that the stream is not null when accessing them through `collections`
   /// If you not call prepareCollection, the stream will be null until it got data from ddp `collection` message.
@@ -264,9 +277,15 @@ class MeteorClient {
   /// `args` List of method arguments
   Future<dynamic> call(String name, List<dynamic> args) async {
     try {
+      if (!isConnected) {
+        await _statusStream.firstWhere((element) => element.connected);
+      }
       return await connection.call(name, args);
     } catch (e) {
-      throw MeteorError.parse(e);
+      var meteorError = MeteorError.parse(e);
+      meteorError.method = name;
+      _errorSubject.sink.add(meteorError);
+      throw meteorError;
     }
   }
 
@@ -279,7 +298,10 @@ class MeteorClient {
     try {
       return await connection.apply(name, args);
     } catch (e) {
-      throw MeteorError.parse(e);
+      var meteorError = MeteorError.parse(e);
+      meteorError.method = name;
+      _errorSubject.sink.add(meteorError);
+      throw meteorError;
     }
   }
 
@@ -287,7 +309,7 @@ class MeteorClient {
   // Server Connections
 
   /// Get the current connection status.
-  Observable<DdpConnectionStatus> status() {
+  ValueStream<DdpConnectionStatus> status() {
     return _statusStream;
   }
 
@@ -306,7 +328,7 @@ class MeteorClient {
   // Accounts
 
   /// Get the current user record, or null if no user is logged in. A reactive data source.
-  Observable<Map<String, dynamic>> user() {
+  Stream<Map<String, dynamic>> user() {
     return _userStream;
   }
 
@@ -315,7 +337,7 @@ class MeteorClient {
   }
 
   /// Get the current user id, or null if no user is logged in. A reactive data source.
-  Observable<String> userId() {
+  Stream<String> userId() {
     return _userIdStream;
   }
 
@@ -324,11 +346,11 @@ class MeteorClient {
   }
 
   /// A Map containing user documents.
-  Observable<Map<String, dynamic>> get users => collections['users'];
+  Stream<Map<String, dynamic>> get users => collections['users'];
 
   /// True if a login method (such as Meteor.loginWithPassword, Meteor.loginWithFacebook, or Accounts.createUser) is currently in progress.
   /// A reactive data source.
-  Observable<bool> loggingIn() {
+  Stream<bool> loggingIn() {
     return _loggingInStream;
   }
 
@@ -380,8 +402,8 @@ class MeteorClient {
   /// Log the user in with a password.
   ///
   /// [user]
-  /// Either a string interpreted as a username or an email; 
-  /// or an object with a single key: email, username or id. 
+  /// Either a string interpreted as a username or an email;
+  /// or an object with a single key: email, username or id.
   /// Username or email match in a case insensitive manner.
   ///
   /// [password] password
@@ -434,6 +456,39 @@ class MeteorClient {
         _userIdSubject.add(_userId);
         completer.completeError(error);
       });
+    });
+    return completer.future;
+  }
+
+  Future<MeteorClientLoginResult> loginWithCode(
+      {String code, String codeType = 'code'}) {
+    Completer<MeteorClientLoginResult> completer = Completer();
+    _loggingIn = true;
+    _loggingInSubject.add(_loggingIn);
+
+    call('login', [
+      {"codeType": 'code', 'code': code}
+    ]).then((result) {
+      _userId = result['id'];
+      _token = result['token'];
+      _tokenExpires =
+          DateTime.fromMillisecondsSinceEpoch(result['tokenExpires']['\$date']);
+      _loggingIn = false;
+      _loggingInSubject.add(_loggingIn);
+      _userIdSubject.add(_userId);
+      completer.complete(MeteorClientLoginResult(
+        userId: _userId,
+        token: _token,
+        tokenExpires: _tokenExpires,
+      ));
+    }).catchError((error) {
+      _userId = null;
+      _token = null;
+      _tokenExpires = null;
+      _loggingIn = false;
+      _loggingInSubject.add(_loggingIn);
+      _userIdSubject.add(_userId);
+      completer.completeError(error);
     });
     return completer.future;
   }

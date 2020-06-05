@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:async';
 import 'dart:math';
 
 const debug = true;
@@ -38,12 +38,20 @@ class SubscriptionHandler {
   String subId;
   StreamController<bool> _readyStreamController = StreamController();
   Stream<bool> _readyStream;
+  StreamController<bool> _stopStreamController = StreamController();
+  Stream<bool> _stopStream;
   SubscriptionHandler(this._ddpClient, this.subId) {
     _readyStream = _readyStreamController.stream.asBroadcastStream();
     _readyStreamController.sink.add(false);
+    _stopStream = _stopStreamController.stream.asBroadcastStream();
+    _stopStreamController.sink.add(false);
   }
   Stream<bool> ready() {
     return _readyStream;
+  }
+
+  Stream<bool> stopStream() {
+    return _stopStream;
   }
 
   void stop() {
@@ -409,6 +417,7 @@ class DdpClient {
           SubscriptionHandler handler = _subscriptionHandlers[id];
           if (handler != null) {
             _subscriptionHandlers.remove(id);
+            handler._stopStreamController.sink.add(true);
             handler = null;
           }
         }
