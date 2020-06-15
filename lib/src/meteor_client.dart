@@ -256,7 +256,7 @@ class MeteorClient {
   /// `params`
   /// Arguments passed to publisher function on server.
   SubscriptionHandler subscribe(String name, List<dynamic> params,
-      {Function onStop(dynamic error), Function onReady}) {
+      {Function(dynamic error) onStop, Function onReady}) {
     // TODO: not subscribe with same name and params.
     SubscriptionHandler handler =
         connection.subscribe(name, params, onStop: onStop, onReady: onReady);

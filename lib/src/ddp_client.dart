@@ -62,9 +62,9 @@ class SubscriptionHandler {
 }
 
 class SubscriptionCallback {
-  Function onStop;
+  Function(dynamic error) onStop;
   Function onReady;
-  SubscriptionCallback({this.onStop(dynamic error), this.onReady});
+  SubscriptionCallback({this.onStop, this.onReady});
 }
 
 class OnReconnectionCallback {
@@ -142,7 +142,7 @@ class DdpClient {
   }
 
   SubscriptionHandler subscribe(String name, List<dynamic> params,
-      {Function onStop(dynamic error), Function onReady}) {
+      {Function(dynamic error) onStop, Function onReady}) {
     String id = name + '-' + _generateUID(16);
     _subscriptions[id] = SubscriptionCallback(onStop: onStop, onReady: onReady);
     var handler = SubscriptionHandler(this, id);
