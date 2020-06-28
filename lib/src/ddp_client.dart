@@ -220,7 +220,7 @@ class DdpClient {
       _statusStreamController.sink.add(_connectionStatus);
       try {
         WebSocket socket =
-            await WebSocket.connect(_url).timeout(Duration(seconds: 5));
+            await WebSocket.connect(_url).timeout(Duration(seconds: 15));
         _connectionStatus.retryCount = 0;
         _connectionStatus.retryTime = Duration(seconds: 1);
         _socket = socket;
