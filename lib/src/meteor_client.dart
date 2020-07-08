@@ -278,6 +278,7 @@ class MeteorClient {
   Future<dynamic> call(String name, List<dynamic> args) async {
     try {
       if (!isConnected) {
+        reconnect();
         await _statusStream.firstWhere((element) => element.connected);
       }
       return await connection.call(name, args);
@@ -296,6 +297,10 @@ class MeteorClient {
   /// `args` List of method arguments
   Future<dynamic> apply(String name, List<dynamic> args) async {
     try {
+      if (!isConnected) {
+        reconnect();
+        await _statusStream.firstWhere((element) => element.connected);
+      }
       return await connection.apply(name, args);
     } catch (e) {
       var meteorError = MeteorError.parse(e);
